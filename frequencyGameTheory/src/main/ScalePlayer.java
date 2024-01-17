@@ -1,3 +1,4 @@
+package main;
 public class ScalePlayer extends Player {
     public ScalePlayer() {
         super();

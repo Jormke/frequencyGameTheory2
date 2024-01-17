@@ -1,3 +1,4 @@
+package main;
 abstract class Player {
     public Player() {}
 

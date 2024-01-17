@@ -1,12 +1,13 @@
+package main;
 /**
- * Double Reinforcement Strategy:
- * Starts as a random player but updates the probability by notes working/not working well for both it and its opponent
+ * Simple Reinforcement Strategy:
+ * Starts as a random player but updates the probability by notes working/not working well
  */
-public class DoubleReinforcementPlayer extends Player {
+public class SimpleReinforcementPlayer extends Player {
     private double[] probabilities = new double[Main.notesFreqMap.size()];
     private int currNoteInd = 0;
 
-    public DoubleReinforcementPlayer() {
+    public SimpleReinforcementPlayer() {
         super();
         for (int i = 0; i < probabilities.length; i++) {
             probabilities[i] = 1; //set initial weighting of each potential note
@@ -43,22 +44,10 @@ public class DoubleReinforcementPlayer extends Player {
     }
 
     @Override
-    protected void update(double recentPayoff, double opponentNoteFreq) {
-        //find the index of the note that corresponds to opponentNoteFreq
-        int opponentNoteInd = 0;
-        for (String s: Main.notesFreqMap.keySet()) {
-            if (opponentNoteFreq >= Main.notesFreqMap.get(s)[0] && opponentNoteFreq <= Main.notesFreqMap.get(s)[1]) {
-                break;
-            }
-            opponentNoteInd++;
-        }
+    protected void update(double recentPayoff) {
         probabilities[currNoteInd]+=recentPayoff;
         if (probabilities[currNoteInd] < 0) {
-            probabilities[currNoteInd] = 0; //floor of probability is 0
-        }
-        probabilities[opponentNoteInd]+=recentPayoff;
-        if (probabilities[opponentNoteInd] < 0) {
-            probabilities[opponentNoteInd] = 0;
+            probabilities[currNoteInd] = 0;
         }
     }
 }

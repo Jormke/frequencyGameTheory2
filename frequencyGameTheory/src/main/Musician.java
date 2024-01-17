@@ -1,3 +1,4 @@
+package main;
 import javax.sound.midi.*;
 import java.io.*;
 import java.util.*;

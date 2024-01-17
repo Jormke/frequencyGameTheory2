@@ -1,11 +1,32 @@
+package main;
 import java.io.*; //BufferedWriter, FileWriter, and File
 import java.util.*; //ArrayList, HashMap, and Map
+
+/**
+ *  Goals: 
+ * 1. Make a simpler way to add in the chord progression, for possible experimentation with other chord progressions.
+ * 2. Fix the variance score
+ *     - Perform data analysis on the variance score in actual music to find optimal variance score distribution
+ *     - Fix the skipping beat 1 problem
+ *     - See if there is a potential problem with the startswith function when checking A vs A#, like maybe A# is being counted as A
+ *     - Potentially implement a spiral method of calculating note distance?? Or maybe we just need variance without consideration of distance.
+ *     - Or maybe we need a seperate note and octave variance score, and we can play with the weight of each one.
+ *     - Fix predictive harmony player and whatever is going on with that a 
+ * 3. Improve Harmony Score
+ *     - use the fraction approximation technique
+ *     - Perform data analysis on the harmony score in actual music to find optimal harmony score distribution
+ */
 
 public class Main {
     protected static Map<String, double[]> notesFreqMap;
     protected static int[] chordProgressionFreq;
 
     public static void main(String[] args) throws Exception {
+        // pairHarmonyScore(2630, 3048); // 5/6
+        // pairHarmonyScore(2630, 3740); // 32/45
+        // pairHarmonyScore(180, 256); // 32/45
+        // pairHarmonyScore(45, 64); // 45/64
+
         buildNotesFrequenciesMap();
         Player p1 = new SimpleReinforcementPlayer();
         Player p2 = new SimpleReinforcementPlayer();
@@ -39,7 +60,7 @@ public class Main {
         ArrayList<Integer> p2Freq = new ArrayList<Integer>(); //saves player 2 notes to list
         double payoffSum = 0.0;
         int measureNum = -1; // counts the measures
-        for (int beatNum = 0; beatNum < 96*8; beatNum++) { // subdividing by eight notes there will be 96 beats in a 12 bar blues
+        for (int beatNum = 0; beatNum < 96*8; beatNum++) { // subdividing by eight notes there will be 96 beats in a 12 bar blues, and then 8 repetitions of the 12 bar blues
             if (beatNum % 8 == 0) measureNum++; // increments measureNum at the start of every 8 beats --> one measure
             chordProgressionFreq = chordProgression.get(measureNum);
             int freqOne = p1.genNote(); //gets note based on p1's strategy
@@ -57,9 +78,10 @@ public class Main {
                 //calculate payoff in here
                 varianceScore = calcVarianceScore(allPastNotes);
             }
-            double harmonyScore = calcHarmonyScore(chordProgressionFreq, freqOne, freqTwo);
+            double harmonyScore = betterCalcHarmonyScore(chordProgressionFreq, freqOne, freqTwo);
             final double normalizationFactor = 1658.833002; //calculation shown in paper; uses raw variance/harmony scores for normalization
             varianceScore*=normalizationFactor;
+            harmonyScore/=3; // If you divide by 3 it sounds fire lowkey
             if (beatNum == 0) {
                 varianceScore = harmonyScore; //makes payoff 0 instead of negative for the first beat
             }
@@ -227,11 +249,26 @@ public class Main {
         }
         for (int x: allPastNotes) {
             for (String s: notesFreqMap.keySet()) {
-                if (x >= notesFreqMap.get(s)[0] && x <= notesFreqMap.get(s)[1]) {
-                    for (String note: notes) {
-                        if (s.startsWith(note)) {
-                            noteCounts.put(note, noteCounts.get(note)+1);
-                            break;
+                if (x >= notesFreqMap.get(s)[0] && x < notesFreqMap.get(s)[1]) {
+                    if (s.contains("#")) {
+                        for (int i =notes.length-1; i >=0; i--) {
+                            String note = notes[i];
+                            if (s.startsWith(note)) {
+                                noteCounts.put(note, noteCounts.get(note)+1);
+                                // System.out.println("Actuall note: " + s);
+                                // System.out.println("Recorded Note: " + note);
+                                break;
+                            }
+                        }
+                    }
+                    else {
+                        for (String note : notes) {
+                            if (s.startsWith(note)) {
+                                noteCounts.put(note, noteCounts.get(note)+1);
+                                // System.out.println("Actuall note: " + s);
+                                // System.out.println("Recorded Note: " + note);
+                                break;
+                            }
                         }
                     }
                 }
@@ -286,6 +323,147 @@ public class Main {
             result--;
         }
         return result;
+    }
+
+    private static int betterCalcHarmonyScore(int[] chord, int freqOne, int freqTwo) {
+        int[] allNotes = new int[chord.length+2];
+        for (int i = 0; i < chord.length; i++) {
+            allNotes[i] = chord[i];
+        }
+        allNotes[chord.length] = freqOne;
+        allNotes[chord.length+1] = freqTwo;
+        int sum = 0;
+        for (int i = 0; i < allNotes.length-1; i++) {
+            for (int j = i + 1; j < allNotes.length; j++) {
+                sum+=pairHarmonyScore(allNotes[i], allNotes[j]);
+            }
+        }
+        return sum;
+    }
+
+    /**
+     * Takes in two frequencies, freqOne and freqTwo, and finds the simplest fraction
+     * of the two frequencies with a 1% error margin.
+     * @param freqOne
+     * @param freqTwo
+     * @return Sum of the numerator and the demoninator.
+     */
+    private static int pairHarmonyScore(int freqOne, int freqTwo) {
+        int numerator; int denominator;
+        // Let's say that frequency1 = 200, and freq2 = 401. So we have the fraction 200/401. 
+        // Freq1 must always be less than freq2
+        if (freqOne > freqTwo) {
+            int temp = freqOne;
+            freqOne = freqTwo;
+            freqTwo = temp;
+        }
+
+        System.out.println("Freq1: " + freqOne + " Freq2: " + freqTwo);
+
+
+        RationalApproximation.setAlphNum(freqOne * 100 * 100); // alpha = alph_num / denum,,, = 200 * 100
+        RationalApproximation.setDenum(freqTwo * 100 * 100); // = 100 * 401
+        RationalApproximation.setDNum(freqOne * 2 * 100); // d = d_num / denum,,, = 401
+        int[] fraction = RationalApproximation.mainThing();
+        numerator = fraction[0];
+        denominator = fraction[1];
+
+        System.out.println("Numerator: " + numerator + " Denominator: " + denominator);
+
+        return numerator + denominator;
+    }
+
+    // Credit for Rational Approximation code: https://link.springer.com/chapter/10.1007/978-3-540-72914-3_15
+    private static class RationalApproximation {
+        private static int alpha_num, d_num, denum;
+
+        private static void setAlphNum(int a) { alpha_num = a; }
+
+        private static void setDenum(int d) { denum = d; }
+
+        private static void setDNum(int d) { d_num = d; }
+
+        private static boolean less(int a,int b,int c,int d) { return (a*d < b*c); }
+        private static boolean less_or_equal(int a, int b, int c, int d) { return (a*d <= b*c); }
+
+        // check whether a/b is a valid approximation 
+        private static int matches(int a, int b) {
+            if (less_or_equal(a,b,alpha_num-d_num,denum)) return 0; 
+            if (less(a,b,alpha_num+d_num,denum)) return 1;
+            return 0;
+        }
+
+        // set initial bounds for the search: 
+        static int p_a = 0 ; 
+        static int q_a = 1 ; 
+        static int p_b = 1 ; 
+        static int q_b = 1;
+
+        private static int[] find_exact_solution_left(int p_a, int q_a, int p_b, int q_b) { 
+            int k_num = denum * p_b - (alpha_num + d_num) * q_b;
+            int k_denum = (alpha_num + d_num) * q_a - denum * p_a;
+            int k = (k_num / k_denum) + 1;
+            int[] result = {(p_b + k*p_a), (q_b + k*q_a)}; 
+            return result;
+        }
+        private static int[] find_exact_solution_right(int p_a,int q_a,int p_b,int q_b) { 
+            int k_num = - denum * p_b + (alpha_num - d_num) * q_b;
+            int k_denum = - (alpha_num - d_num) * q_a + denum * p_a;
+            int k = (k_num / k_denum) + 1;
+            int[] result = {(p_b + k*p_a), (q_b + k*q_a)}; 
+            return result;
+        }
+
+        private static int[] mainThing() {
+            while (true) {
+                // Compute the number of steps to the left
+                int x_num = denum * p_b - alpha_num * q_b;
+                int x_denum = -denum * p_a + alpha_num * q_a;
+                int x = (x_num + x_denum - 1) / x_denum; // Equivalent to ceil(x_num / x_denum)
+
+                // Check whether we have a valid approximation
+                boolean aa = matches(p_b + x * p_a, q_b + x * q_a) == 1;
+                boolean bb = matches(p_b + (x - 1) * p_a, q_b + (x - 1) * q_a) == 1;
+                if (aa || bb) {
+                    return find_exact_solution_left(p_a, q_a, p_b, q_b);
+                }
+
+                // Update the interval
+                int new_p_a = p_b + (x - 1) * p_a;
+                int new_q_a = q_b + (x - 1) * q_a;
+                int new_p_b = p_b + x * p_a;
+                int new_q_b = q_b + x * q_a;
+                p_a = new_p_a;
+                q_a = new_q_a;
+                p_b = new_p_b;
+                q_b = new_q_b;
+
+                // Compute the number of steps to the right
+                x_num = alpha_num * q_b - denum * p_b;
+                x_denum = -alpha_num * q_a + denum * p_a;
+                x = (x_num + x_denum - 1) / x_denum; // Equivalent to ceil(x_num / x_denum)
+
+                // Check whether we have a valid approximation
+                aa = matches(p_b + x * p_a, q_b + x * q_a) == 1;
+                bb = matches(p_b + (x - 1) * p_a, q_b + (x - 1) * q_a) == 1;
+                if (aa || bb) {
+                    return find_exact_solution_right(p_a, q_a, p_b, q_b);
+                }
+
+                // Update the interval
+                new_p_a = p_b + (x - 1) * p_a;
+                new_q_a = q_b + (x - 1) * q_a;
+                new_p_b = p_b + x * p_a;
+                new_q_b = q_b + x * q_a;
+                p_a = new_p_a;
+                q_a = new_q_a;
+                p_b = new_p_b;
+                q_b = new_q_b;
+                
+                
+            }
+        }
+
     }
 
     /**
